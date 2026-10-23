@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>基于OneNET的硬件与微信小程序联动系统 — 项目说明文档</title>
+<style>
+  :root {
+    --bg: #0f0f1a;
+    --card-bg: rgba(255,255,255,0.04);
+    --text: #e0e0e0;
+    --accent: #4facfe;
+    --accent2: #00f2fe;
+    --green: #10b981;
+    --red: #ef4444;
+    --yellow: #ffd93d;
+    --purple: #667eea;
+    --pink: #f093fb;
+    --border: rgba(255,255,255,0.08);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, var(--bg) 0%, #1a1a2e 100%);
+    color: var(--text);
+    line-height: 1.8;
+    min-height: 100vh;
+  }
+
+  /* ── Hero ── */
+  .hero {
+    text-align: center;
+    padding: 80px 20px 60px;
+    background: linear-gradient(180deg, rgba(79,172,254,0.08) 0%, transparent 100%);
+  }
+  .hero h1 {
+    font-size: 2.2em;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 12px;
+  }
+  .hero .subtitle {
+    font-size: 1.1em;
+    color: rgba(255,255,255,0.55);
+  }
+  .hero .badge-row {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+  .badge {
+    padding: 6px 18px;
+    border-radius: 20px;
+    font-size: 0.85em;
+    font-weight: 500;
+  }
+  .badge.stm32 { background: rgba(79,172,254,0.15); color: var(--accent); }
+  .badge.onenet { background: rgba(0,242,254,0.15); color: var(--accent2); }
+  .badge.wx { background: rgba(16,185,129,0.15); color: var(--green); }
+  .badge.wifi { background: rgba(255,217,61,0.15); color: var(--yellow); }
+
+  /* ── Container ── */
+  .container { max-width: 1000px; margin: 0 auto; padding: 0 24px 60px; }
+
+  /* ── Section cards ── */
+  .section {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 36px;
+    margin-bottom: 28px;
+    backdrop-filter: blur(10px);
+  }
+  .section h2 {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 1.4em;
+    color: #fff;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section h2 .icon { font-size: 1.3em; }
+  .section h3 {
+    font-size: 1.1em;
+    color: var(--accent);
+    margin: 24px 0 12px;
+    padding-left: 12px;
+    border-left: 3px solid var(--accent);
+  }
+
+  /* ── Architecture diagram ── */
+  .arch-diagram {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    padding: 30px 0;
+  }
+  .arch-node {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    text-align: center;
+    min-width: 140px;
+  }
+  .arch-node .n-icon { font-size: 2em; margin-bottom: 8px; }
+  .arch-node .n-label { font-weight: 600; color: #fff; font-size: 0.9em; }
+  .arch-arrow { color: var(--accent); font-size: 1.5em; }
+
+  /* ── Flow step ── */
+  .flow-list { display: flex; flex-direction: column; gap: 16px; }
+  .flow-step {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .flow-num {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+    font-size: 0.9em;
+  }
+  .flow-content { flex: 1; }
+  .flow-content .title { font-weight: 600; color: #fff; }
+  .flow-content .desc { color: rgba(255,255,255,0.6); font-size: 0.9em; margin-top: 4px; }
+
+  /* ── Tables ── */
+  table {
+    width: 100%; border-collapse: collapse; margin: 16px 0;
+    font-size: 0.92em;
+  }
+  th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  th { color: rgba(255,255,255,0.55); font-weight: 600; font-size: 0.85em; text-transform: uppercase; }
+  td { color: #e0e0e0; }
+  tr:last-child td { border-bottom: none; }
+  td.mono { font-family: "SF Mono", "Cascadia Code", "Consolas", monospace; font-size: 0.88em; color: var(--accent2); }
+
+  /* ── Code blocks ── */
+  pre {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    overflow-x: auto;
+    font-size: 0.85em;
+    line-height: 1.5;
+    margin: 16px 0;
+  }
+  code { font-family: "SF Mono", "Cascadia Code", "Consolas", "Fira Code", monospace; }
+  pre code { color: #c9d1d9; }
+  .kw { color: #ff79c6; }
+  .str { color: #f1fa8c; }
+  .cmt { color: #6272a4; }
+  .num { color: #bd93f9; }
+  .fn { color: #50fa7b; }
+
+  /* ── Tags / Labels ── */
+  .tag {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 0.8em;
+    font-weight: 600;
+    margin: 0 4px;
+  }
+  .tag.mqtt { background: rgba(255,217,61,0.12); color: var(--yellow); }
+  .tag.rest { background: rgba(79,172,254,0.12); color: var(--accent); }
+  .tag.gpio { background: rgba(16,185,129,0.12); color: var(--green); }
+  .tag.adc  { background: rgba(240,147,251,0.12); color: var(--pink); }
+  .tag.json { background: rgba(102,126,234,0.12); color: var(--purple); }
+
+  /* ── Module card grid ── */
+  .module-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin: 20px 0;
+  }
+  .module-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+  }
+  .module-card .m-icon { font-size: 2em; margin-bottom: 10px; }
+  .module-card .m-title { font-weight: 700; color: #fff; font-size: 1.05em; margin-bottom: 8px; }
+  .module-card .m-device { color: var(--accent2); font-size: 0.85em; font-family: monospace; margin-bottom: 12px; }
+  .module-card ul { list-style: none; padding: 0; }
+  .module-card li { color: rgba(255,255,255,0.65); font-size: 0.88em; padding: 4px 0; }
+  .module-card li::before { content: "▸ "; color: var(--accent); }
+
+  /* ── Mini-program page cards ── */
+  .page-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    margin: 16px 0;
+  }
+  .page-card .p-name { font-weight: 700; color: #fff; font-size: 1.05em; margin-bottom: 4px; }
+  .page-card .p-path { color: rgba(255,255,255,0.35); font-size: 0.82em; font-family: monospace; margin-bottom: 12px; }
+
+  /* ── Feature list ── */
+  .feature-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .feature-item {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .feature-item .f-title { font-weight: 600; color: #fff; margin-bottom: 6px; }
+
+  /* ── Toc ── */
+  .toc { list-style: none; padding: 0; columns: 2; column-gap: 30px; }
+  .toc li { padding: 6px 0; }
+  .toc a { color: var(--accent); text-decoration: none; font-size: 0.92em; }
+  .toc a:hover { text-decoration: underline; }
+
+  /* ── Footer ── */
+  .footer { text-align: center; padding: 40px 20px; color: rgba(255,255,255,0.3); font-size: 0.85em; }
+
+  @media (max-width: 768px) {
+    .toc { columns: 1; }
+    .arch-diagram { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════ HERO ═══════════════════════ -->
+<div class="hero">
+  <h1>基于OneNET的硬件与微信小程序联动系统</h1>
+  <p class="subtitle">STM32F103 + ESP8266 + OneNET MQTT + 微信小程序 — 光照·人体感应·蜂鸣器 多设备协同</p>
+  <div class="badge-row">
+    <span class="badge stm32">STM32F103</span>
+    <span class="badge wifi">ESP8266 WiFi</span>
+    <span class="badge onenet">OneNET MQTT</span>
+    <span class="badge wx">微信小程序</span>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- ═══════════════════════ 目录 ═══════════════════════ -->
+<div class="section">
+  <h2><span class="icon">📑</span> 目录</h2>
+  <ul class="toc">
+    <li><a href="#overview">1. 项目概述</a></li>
+    <li><a href="#architecture">2. 系统架构</a></li>
+    <li><a href="#hardware">3. 硬件模块详解</a></li>
+    <li><a href="#miniprogram">4. 微信小程序端</a></li>
+    <li><a href="#communication">5. 通信协议与数据流</a></li>
+    <li><a href="#scene">6. 场景联动机制</a></li>
+    <li><a href="#setup">7. 部署与配置指南</a></li>
+    <li><a href="#file-structure">8. 项目文件结构</a></li>
+    <li><a href="#tech-stack">9. 技术栈总览</a></li>
+  </ul>
+</div>
+
+<!-- ═══════════════════════ 1. 项目概述 ═══════════════════════ -->
+<div class="section" id="overview">
+  <h2><span class="icon">📋</span> 1. 项目概述</h2>
+  <p>本项目是一个完整的物联网(IoT)解决方案，通过<strong>中国移动OneNET云平台</strong>实现<strong>STM32F103硬件终端</strong>与<strong>微信小程序</strong>之间的双向数据通信与远程控制。系统包含三个独立硬件模块（光照传感器、人体感应传感器、蜂鸣器）和一个微信小程序控制端，可应用于智能家居、环境监测、安防联动等场景。</p>
+
+  <h3>核心功能</h3>
+  <div class="feature-list">
+    <div class="feature-item">
+      <div class="f-title">☀️ 光照采集与智能控灯</div>
+      <p style="color:rgba(255,255,255,0.55);font-size:0.88em;">ADC采集环境光照强度(Lux)，支持自动模式（暗时开灯/亮时关灯）与手动远程控制</p>
+    </div>
+    <div class="feature-item">
+      <div class="f-title">👤 人体感应检测</div>
+      <p style="color:rgba(255,255,255,0.55);font-size:0.88em;">HC-SR501 PIR传感器实时检测人体活动，有人时亮灯提示</p>
+    </div>
+    <div class="feature-item">
+      <div class="f-title">🔊 蜂鸣器报警</div>
+      <p style="color:rgba(255,255,255,0.55);font-size:0.88em;">间歇式蜂鸣控制（响1秒停2秒），支持手动开关和场景联动触发</p>
+    </div>
+    <div class="feature-item">
+      <div class="f-title">📱 微信小程序监控</div>
+      <p style="color:rgba(255,255,255,0.55);font-size:0.88em;">实时仪表盘、历史趋势图、照明/蜂鸣器远程控制、多设备配置管理</p>
+    </div>
+    <div class="feature-item">
+      <div class="f-title">🔗 跨设备场景联动</div>
+      <p style="color:rgba(255,255,255,0.55);font-size:0.88em;">光照≥3000 Lux时自动触发蜂鸣器，实现设备间M2M自动协同</p>
+    </div>
+    <div class="feature-item">
+      <div class="f-title">💾 本地数据持久化</div>
+      <p style="color:rgba(255,255,255,0.55);font-size:0.88em;">IndexedDB存储历史传感器数据与设备配置，支持离线查看</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ 2. 系统架构 ═══════════════════════ -->
+<div class="section" id="architecture">
+  <h2><span class="icon">🏗️</span> 2. 系统架构</h2>
+
+  <div class="arch-diagram">
+    <div class="arch-node">
+      <div class="n-icon">☀️</div>
+      <div class="n-label">光照模块<br><small style="color:var(--accent2)">addp_01</small></div>
+    </div>
+    <span class="arch-arrow">→</span>
+    <div class="arch-node">
+      <div class="n-icon">👤</div>
+      <div class="n-label">人体感应<br><small style="color:var(--accent2)">addp_02</small></div>
+    </div>
+    <span class="arch-arrow">→</span>
+    <div class="arch-node">
+      <div class="n-icon">☁️</div>
+      <div class="n-label">OneNET<br><small style="color:var(--accent2)">MQTT Broker</small></div>
+    </div>
+    <span class="arch-arrow">→</span>
+    <div class="arch-node">
+      <div class="n-icon">📱</div>
+      <div class="n-label">微信小程序<br><small style="color:var(--accent2)">REST API</small></div>
+    </div>
+    <span class="arch-arrow">←</span>
+    <div class="arch-node">
+      <div class="n-icon">🔊</div>
+      <div class="n-label">蜂鸣器<br><small style="color:var(--accent2)">addp_03</small></div>
+    </div>
+  </div>
+
+  <h3>数据流概览</h3>
+  <div class="flow-list">
+    <div class="flow-step">
+      <div class="flow-num">1</div>
+      <div class="flow-content">
+        <div class="title">硬件采集 <span class="tag gpio">GPIO</span><span class="tag adc">ADC</span></div>
+        <div class="desc">STM32通过ADC读取光照传感器、GPIO读取PIR人体传感器数据</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">2</div>
+      <div class="flow-content">
+        <div class="title">WiFi上传 <span class="tag mqtt">MQTT</span></div>
+        <div class="desc">ESP8266通过MQTT协议将JSON数据包发布到OneNET平台</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">3</div>
+      <div class="flow-content">
+        <div class="title">云端存储</div>
+        <div class="desc">OneNET平台接收并存储设备属性数据，提供REST API查询接口</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">4</div>
+      <div class="flow-content">
+        <div class="title">小程序查询 <span class="tag rest">REST</span></div>
+        <div class="desc">微信小程序每10秒调用OneNET物模型API获取最新设备数据</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">5</div>
+      <div class="flow-content">
+        <div class="title">反向控制 <span class="tag rest">REST → MQTT</span></div>
+        <div class="desc">小程序通过REST API下发控制指令，OneNET通过MQTT转发到硬件设备</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">6</div>
+      <div class="flow-content">
+        <div class="title">场景联动 <span class="tag mqtt">MQTT P2P</span></div>
+        <div class="desc">光照模块检测到光照≥3000 Lux时，直接通过MQTT向蜂鸣器模块发送触发指令</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ 3. 硬件模块详解 ═══════════════════════ -->
+<div class="section" id="hardware">
+  <h2><span class="icon">🔧</span> 3. 硬件模块详解</h2>
+  <p style="margin-bottom:20px;color:rgba(255,255,255,0.55);">三个硬件模块均采用 <strong>STM32F103</strong> 作为主控芯片，通过 <strong>ESP8266</strong> WiFi模块连接网络，运行 FreeRTOS 环境（RTE），使用 Keil MDK 开发。</p>
+
+  <div class="module-grid">
+
+    <!-- 光照模块 -->
+    <div class="module-card">
+      <div class="m-icon">☀️</div>
+      <div class="m-title">光照传感器模块</div>
+      <div class="m-device">设备名：addp_01</div>
+      <ul>
+        <li>主控：STM32F103</li>
+        <li>传感器：模拟光照传感器 (PA7 / ADC1_CH7)</li>
+        <li>输出：PB1 绿色LED（低电平有效）</li>
+        <li>显示：OLED (I2C)</li>
+        <li>自动模式：光照 &lt; 1000 Lux → 开灯；光照 ≥ 1000 Lux → 关灯</li>
+        <li>TIM2定时器：100ms周期检查光照阈值</li>
+        <li>手动模式：小程序下发 <code>led: true/false</code></li>
+        <li>ADC校准：两点线性插值 (1200→300Lux, 3000→8000Lux)</li>
+        <li>上报周期：每1秒 (10×100ms)</li>
+        <li>上报数据：light (光照值), led_mode (模式)</li>
+      </ul>
+    </div>
+
+    <!-- 人体感应模块 -->
+    <div class="module-card">
+      <div class="m-icon">👤</div>
+      <div class="m-title">人体感应模块</div>
+      <div class="m-device">设备名：addp_02</div>
+      <ul>
+        <li>主控：STM32F103</li>
+        <li>传感器：HC-SR501 PIR人体红外传感器 (PA4)</li>
+        <li>输出：PB1 绿色LED</li>
+        <li>显示：OLED</li>
+        <li>逻辑：有人(低电平) → LED开；无人(高电平) → LED关</li>
+        <li>上报周期：每1秒 (10×100ms)</li>
+        <li>上报数据：Pir (bool, true=无人 / false=有人)</li>
+      </ul>
+    </div>
+
+    <!-- 蜂鸣器模块 -->
+    <div class="module-card">
+      <div class="m-icon">🔊</div>
+      <div class="m-title">蜂鸣器模块</div>
+      <div class="m-device">设备名：addp_03</div>
+      <ul>
+        <li>主控：STM32F103</li>
+        <li>执行器：有源蜂鸣器 (PA6)</li>
+        <li>间歇模式：响1秒 → 停2秒 → 循环 (100ms/tick)</li>
+        <li>控制方式：手动（小程序）或联动（光照模块触发）</li>
+        <li>联动触发条件：光照≥3000 Lux</li>
+        <li>上报周期：每3秒 (30×100ms)</li>
+        <li>上报数据：buzzer_switch (bool)</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>硬件引脚分配</h3>
+  <table>
+    <tr><th>模块</th><th>外设</th><th>引脚</th><th>功能</th></tr>
+    <tr><td rowspan="4">光照模块</td><td>光照传感器</td><td class="mono">PA7</td><td>ADC1_CH7 模拟输入</td></tr>
+    <tr><td>绿色LED</td><td class="mono">PB1</td><td>推挽输出（低电平点亮）</td></tr>
+    <tr><td>ESP8266</td><td class="mono">USART2 (PA2/PA3)</td><td>串口通信 115200bps</td></tr>
+    <tr><td>调试串口</td><td class="mono">USART3</td><td>115200bps 日志输出</td></tr>
+    <tr><td rowspan="3">人体感应</td><td>PIR传感器</td><td class="mono">PA4</td><td>上拉输入（高=无人，低=有人）</td></tr>
+    <tr><td>绿色LED</td><td class="mono">PB1</td><td>推挽输出</td></tr>
+    <tr><td>ESP8266</td><td class="mono">USART2</td><td>115200bps</td></tr>
+    <tr><td rowspan="2">蜂鸣器</td><td>蜂鸣器</td><td class="mono">PA6</td><td>推挽输出（高电平鸣叫）</td></tr>
+    <tr><td>ESP8266</td><td class="mono">USART2</td><td>115200bps</td></tr>
+  </table>
+
+  <h3>光照模块关键代码逻辑</h3>
+  <pre><code><span class="cmt">// TIM2中断：自动模式下的光照控制 (100ms周期)</span>
+<span class="kw">void</span> <span class="fn">TIM2_IRQHandler</span>(<span class="kw">void</span>) {
+    <span class="kw">if</span>(TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET) {
+        TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
+        <span class="kw">if</span>(led_mode == <span class="num">0</span>) {  <span class="cmt">// 自动模式</span>
+            <span class="kw">if</span>(light &lt; <span class="num">1000</span>) LED_Green_On();
+            <span class="kw">else</span>             LED_Green_Off();
+        }
+    }
+}
+
+<span class="cmt">// 光照采集：ADC10次采样取平均 → 线性插值转Lux</span>
+<span class="kw">uint16_t</span> <span class="fn">Light_GetLux</span>(<span class="kw">void</span>) {
+    <span class="kw">uint16_t</span> adc = Light_GetAdcAverage(); <span class="cmt">// 10次均值</span>
+    <span class="kw">float</span> lux = (adc - <span class="num">1200</span>) * (<span class="num">8000</span> - <span class="num">300</span>)
+                / (<span class="num">3000</span> - <span class="num">1200</span>) + <span class="num">300</span>;
+    <span class="kw">return</span> (<span class="kw">uint16_t</span>)lux;
+}</code></pre>
+</div>
+
+<!-- ═══════════════════════ 4. 微信小程序 ═══════════════════════ -->
+<div class="section" id="miniprogram">
+  <h2><span class="icon">📱</span> 4. 微信小程序端</h2>
+  <p style="margin-bottom:20px;color:rgba(255,255,255,0.55);">AppID: <code class="mono">wxce1461b726368140</code> &nbsp;|&nbsp; 基础库版本: 3.16.1 &nbsp;|&nbsp; 框架: Glass-Easel</p>
+
+  <h3>页面结构</h3>
+
+  <!-- 设备监控页 -->
+  <div class="page-card">
+    <div class="p-name">📊 设备监控 (pages/index/index)</div>
+    <div class="p-path">主页面 — 实时数据 + 历史图表 + 设备控制</div>
+    <br>
+    <table>
+      <tr><th style="width:110px">功能区</th><th>功能描述</th></tr>
+      <tr>
+        <td>设备状态栏</td>
+        <td>显示三个设备名称、在线/离线状态、最后更新时间、错误信息</td>
+      </tr>
+      <tr>
+        <td>实时数据卡片</td>
+        <td>2列网格展示：光照强度(Lux)、人体感应(有人/无人)、蜂鸣器(已触发/未触发)；渐变色背景，点击查看详情弹窗</td>
+      </tr>
+      <tr>
+        <td>历史趋势图</td>
+        <td>Canvas绑制折线图，支持光照/全部数据切换，触摸滑动浏览历史数据点，Y轴自适应刻度</td>
+      </tr>
+      <tr>
+        <td>照明控制区</td>
+        <td>打开/关闭绿色LED按钮 + 切换到自动模式按钮；手动操作后自动进入手动模式</td>
+      </tr>
+      <tr>
+        <td>蜂鸣器控制区</td>
+        <td>手动开启/关闭蜂鸣器按钮；显示场景联动规则（光照≥3000触发 / ≤1000关闭）</td>
+      </tr>
+      <tr>
+        <td>命令输入区</td>
+        <td>文本输入框 + 发送按钮，支持自定义属性命令下发</td>
+      </tr>
+      <tr>
+        <td>底部导航</td>
+        <td>跳转历史记录页 / 设备配置页</td>
+      </tr>
+    </table>
+    <br>
+    <p style="color:rgba(255,255,255,0.4);font-size:0.82em;">数据刷新间隔：10秒自动轮询，支持手动下拉刷新。三设备并行查询(Promise.all)，渲染Canvas图表（支持触摸手势滑动）。</p>
+  </div>
+
+  <!-- 设备配置页 -->
+  <div class="page-card">
+    <div class="p-name">⚙️ 设备配置 (pages/config/config)</div>
+    <div class="p-path">配置页面 — OneNET产品信息与设备名称管理</div>
+    <br>
+    <table>
+      <tr><th style="width:110px">功能区</th><th>功能描述</th></tr>
+      <tr>
+        <td>产品信息</td>
+        <td>产品ID (Product ID) 和 Access Key 输入（密码框）</td>
+      </tr>
+      <tr>
+        <td>设备名称</td>
+        <td>三个独立输入框：光照设备(默认addp_01)、人体感应(默认addp_02)、蜂鸣器(默认addp_03)</td>
+      </tr>
+      <tr>
+        <td>保存/清除</td>
+        <td>持久化到 IndexedDB + wx.Storage 双重存储</td>
+      </tr>
+      <tr>
+        <td>已保存配置</td>
+        <td>展示当前配置摘要，测试连接按钮（调用query-device-property API验证）</td>
+      </tr>
+      <tr>
+        <td>历史配置</td>
+        <td>从数据库加载所有已保存配置，支持点击切换</td>
+      </tr>
+      <tr>
+        <td>使用说明</td>
+        <td>4步引导：获取OneNET凭证 → 填写配置 → 确认设备名 → 测试连接</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- 历史记录页 -->
+  <div class="page-card">
+    <div class="p-name">📅 历史记录 (pages/logs/logs)</div>
+    <div class="p-path">日志页面 — 启动/操作时间戳记录</div>
+    <br>
+    <p style="color:rgba(255,255,255,0.5);">展示小程序启动历史时间戳列表（基于wx.Storage的logs数组），格式化显示日期时间。</p>
+  </div>
+
+  <h3>小程序API调用</h3>
+  <table>
+    <tr><th>API端点</th><th>方法</th><th>用途</th></tr>
+    <tr>
+      <td class="mono">/thingmodel/query-device-property</td>
+      <td><span class="tag rest">GET</span></td>
+      <td>查询设备属性值（光照、人体感应、蜂鸣器状态）</td>
+    </tr>
+    <tr>
+      <td class="mono">/thingmodel/set-device-property</td>
+      <td><span class="tag rest">POST</span></td>
+      <td>设置设备属性（开关LED、开关蜂鸣器、发送自定义命令）</td>
+    </tr>
+  </table>
+  <p style="margin-top:8px;color:rgba(255,255,255,0.4);font-size:0.82em;">API Base URL: <code>https://iot-api.heclouds.com</code> &nbsp;|&nbsp; 鉴权方式: <code>authorization</code> Header 传入 Access Key</p>
+
+  <h3>工具模块 (utils/database.js)</h3>
+  <p>封装了完整的本地数据库层，优先使用 <strong>IndexedDB</strong> (数据库名: <code>IoTMonitorDB</code>)，失败时自动降级到 <strong>wx.Storage</strong>。包含两个对象存储：</p>
+  <ul style="list-style:none;padding-left:20px;">
+    <li style="padding:4px 0;"><span class="tag json">configs</span> — 设备配置表（deviceId唯一索引）</li>
+    <li style="padding:4px 0;"><span class="tag json">sensorData</span> — 传感器历史数据（deviceId + timestamp索引，最多保留1000条，支持7天过期清理）</li>
+  </ul>
+</div>
+
+<!-- ═══════════════════════ 5. 通信协议 ═══════════════════════ -->
+<div class="section" id="communication">
+  <h2><span class="icon">📡</span> 5. 通信协议与数据流</h2>
+
+  <h3>MQTT连接参数</h3>
+  <table>
+    <tr><th>参数</th><th>值</th></tr>
+    <tr><td>服务器地址</td><td class="mono">mqtts.heclouds.com</td></tr>
+    <tr><td>产品ID</td><td class="mono">182uSs4N9a</td></tr>
+    <tr><td>认证方式</td><td>HMAC-SHA1 + Base64 (OneNET Token算法)</td></tr>
+    <tr><td>协议版本</td><td class="mono">2018-10-31</td></tr>
+    <tr><td>QoS等级</td><td>QoS 0 (最多一次)</td></tr>
+    <tr><td>Keep Alive</td><td>256 秒</td></tr>
+  </table>
+
+  <h3>MQTT主题 (Topic)</h3>
+  <table>
+    <tr><th>主题模板</th><th>方向</th><th>说明</th></tr>
+    <tr>
+      <td class="mono">$sys/{pid}/{device}/thing/property/post</td>
+      <td>设备→云</td>
+      <td>设备属性上报</td>
+    </tr>
+    <tr>
+      <td class="mono">$sys/{pid}/{device}/thing/property/set</td>
+      <td>云→设备</td>
+      <td>属性设置下发（设备订阅）</td>
+    </tr>
+    <tr>
+      <td class="mono">$sys/{pid}/{device}/thing/property/set_reply</td>
+      <td>设备→云</td>
+      <td>属性设置应答</td>
+    </tr>
+  </table>
+
+  <h3>上行数据格式 (设备→云)</h3>
+  <pre><code><span class="cmt">// 光照模块上报</span>
+{
+  <span class="str">"method"</span>: <span class="str">"thing.property.post"</span>,
+  <span class="str">"id"</span>: <span class="str">"1"</span>,
+  <span class="str">"params"</span>: {
+    <span class="str">"light"</span>: { <span class="str">"value"</span>: <span class="num">2456</span> }
+  },
+  <span class="str">"version"</span>: <span class="str">"1.0"</span>
+}</code></pre>
+
+  <h3>下行控制格式 (云→设备)</h3>
+  <pre><code><span class="cmt">// 小程序通过REST API下发 → OneNET转为MQTT推送</span>
+{
+  <span class="str">"id"</span>: <span class="str">"uuid-xxx"</span>,
+  <span class="str">"params"</span>: {
+    <span class="str">"led"</span>: { <span class="str">"value"</span>: <span class="kw">true</span> }
+  },
+  <span class="str">"version"</span>: <span class="str">"1.0"</span>
+}
+
+<span class="cmt">// 设备回复应答</span>
+{
+  <span class="str">"id"</span>: <span class="str">"uuid-xxx"</span>,
+  <span class="str">"code"</span>: <span class="num">0</span>,
+  <span class="str">"msg"</span>: <span class="str">"success"</span>
+}</code></pre>
+
+  <h3>OneNET REST API (小程序端)</h3>
+  <pre><code><span class="cmt">// 查询设备属性</span>
+GET https://iot-api.heclouds.com/thingmodel/query-device-property
+  ?product_id=<span class="str">"182uSs4N9a"</span>
+  &device_name=<span class="str">"addp_01"</span>
+Header: authorization: <span class="str">"your-access-key"</span>
+
+<span class="cmt">// 响应示例</span>
+{
+  <span class="str">"code"</span>: <span class="num">0</span>,
+  <span class="str">"msg"</span>: <span class="str">"SUCCESS"</span>,
+  <span class="str">"data"</span>: [
+    { <span class="str">"identifier"</span>: <span class="str">"light"</span>, <span class="str">"value"</span>: <span class="num">2456</span> }
+  ]
+}
+
+<span class="cmt">// 设置设备属性</span>
+POST https://iot-api.heclouds.com/thingmodel/set-device-property
+Body: {
+  <span class="str">"product_id"</span>: <span class="str">"182uSs4N9a"</span>,
+  <span class="str">"device_name"</span>: <span class="str">"addp_01"</span>,
+  <span class="str">"params"</span>: { <span class="str">"led"</span>: <span class="kw">true</span> }
+}</code></pre>
+</div>
+
+<!-- ═══════════════════════ 6. 场景联动 ═══════════════════════ -->
+<div class="section" id="scene">
+  <h2><span class="icon">🔗</span> 6. 场景联动机制</h2>
+  <p>这是本项目最具特色的功能：硬件设备之间通过 OneNET MQTT 消息实现 <strong>M2M (Machine-to-Machine)</strong> 自动协同，无需小程序或云端规则引擎参与。</p>
+
+  <h3>联动规则</h3>
+  <div class="flow-list">
+    <div class="flow-step">
+      <div class="flow-num">☀️</div>
+      <div class="flow-content">
+        <div class="title">触发条件</div>
+        <div class="desc">光照模块 (addp_01) 检测到环境光照 <strong>≥ 3000 Lux</strong></div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">📤</div>
+      <div class="flow-content">
+        <div class="title">MQTT发布</div>
+        <div class="desc">光照模块直接向主题 <code class="mono">$sys/182uSs4N9a/addp_03/thing/property/set</code> 发布消息 <code class="mono">{"buzzer_switch":{"value":true}}</code></div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">🔊</div>
+      <div class="flow-content">
+        <div class="title">蜂鸣器响应</div>
+        <div class="desc">蜂鸣器模块 (addp_03) 收到MQTT消息后，开启间歇蜂鸣（响1秒停2秒循环）</div>
+      </div>
+    </div>
+  </div>
+
+  <p style="margin-top:16px;color:rgba(255,255,255,0.55);">此联动代码位于光照模块的 <code>onenet.c</code> 中：</p>
+  <pre><code><span class="kw">void</span> <span class="fn">OneNET_PushLightToFan</span>(<span class="kw">void</span>) {
+    <span class="kw">static</span> u8 last_buzzer_cmd = <span class="num">0</span>;
+    u8 should_buzzer_on = (light &gt;= <span class="num">3000</span>) ? <span class="num">1</span> : <span class="num">0</span>;
+    
+    <span class="kw">if</span>(should_buzzer_on != last_buzzer_cmd) {  <span class="cmt">// 仅状态变化时发送</span>
+        last_buzzer_cmd = should_buzzer_on;
+        snprintf(topic, ..., <span class="str">"$sys/%s/addp_03/thing/property/set"</span>, ...);
+        snprintf(msg, ..., <span class="str">"{\"buzzer_switch\":{\"value\":%s}}"</span>, ...);
+        OneNET_Publish(topic, msg);  <span class="cmt">// 跨设备MQTT消息</span>
+    }
+}</code></pre>
+  <p style="color:rgba(255,255,255,0.4);font-size:0.82em;">该方法在光照模块的主循环中每1秒调用一次（与数据上报同频）。仅在状态变化时发送，避免重复消息。</p>
+</div>
+
+<!-- ═══════════════════════ 7. 部署与配置 ═══════════════════════ -->
+<div class="section" id="setup">
+  <h2><span class="icon">🚀</span> 7. 部署与配置指南</h2>
+
+  <h3>硬件部署</h3>
+  <ol style="padding-left:20px;color:rgba(255,255,255,0.7);">
+    <li style="padding:6px 0;">使用 Keil MDK 分别打开三个模块的 <code class="mono">stm32f103.uvprojx</code> 工程文件</li>
+    <li style="padding:6px 0;">编译并烧录到对应的 STM32F103 开发板</li>
+    <li style="padding:6px 0;">确保 ESP8266 WiFi 模块已配置好 SSID 和密码（在 <code>esp8266.h</code> 中配置）</li>
+    <li style="padding:6px 0;">上电后设备自动连接 WiFi → 连接 OneNET MQTT → 订阅控制主题 → 开始上报数据</li>
+    <li style="padding:6px 0;">通过串口3 (115200bps) 可观察调试日志，确认连接状态和数据上报</li>
+  </ol>
+
+  <h3>微信小程序部署</h3>
+  <ol style="padding-left:20px;color:rgba(255,255,255,0.7);">
+    <li style="padding:6px 0;">使用微信开发者工具打开 <code class="mono">miniprogram-1 - 副本</code> 目录</li>
+    <li style="padding:6px 0;">AppID 已配置为 <code class="mono">wxce1461b726368140</code></li>
+    <li style="padding:6px 0;">在「设备配置」页面填入 OneNET 产品ID 和 Access Key</li>
+    <li style="padding:6px 0;">确认三个设备名称与 OneNET 平台注册的设备名一致</li>
+    <li style="padding:6px 0;">点击「测试连接」验证配置正确性</li>
+    <li style="padding:6px 0;">进入「设备监控」页面即可查看实时数据和进行远程控制</li>
+  </ol>
+
+  <h3>OneNET平台配置</h3>
+  <ol style="padding-left:20px;color:rgba(255,255,255,0.7);">
+    <li style="padding:6px 0;">登录 <a href="https://open.iot.10086.cn/" style="color:var(--accent);">OneNET开放平台</a></li>
+    <li style="padding:6px 0;">创建MQTT产品，获取产品ID (Product ID)</li>
+    <li style="padding:6px 0;">在「设备管理」中添加三个设备：<code class="mono">addp_01</code>（光照）、<code class="mono">addp_02</code>（人体）、<code class="mono">addp_03</code>（蜂鸣器）</li>
+    <li style="padding:6px 0;">在「物模型」中为每个设备定义属性：光照设备定义 <code>light</code> 和 <code>led</code>，人体设备定义 <code>Pir</code>，蜂鸣器设备定义 <code>buzzer_switch</code></li>
+    <li style="padding:6px 0;">获取 Access Key（产品详情页 → 接入认证）</li>
+  </ol>
+</div>
+
+<!-- ═══════════════════════ 8. 文件结构 ═══════════════════════ -->
+<div class="section" id="file-structure">
+  <h2><span class="icon">📁</span> 8. 项目文件结构</h2>
+
+  <pre><code>xchbd/
+├── 光照部分副本/              <span class="cmt"># 光照传感器STM32工程 (addp_01)</span>
+│   ├── user/main.c           <span class="cmt"># 主程序：ADC采集+TIM2自动控灯+MQTT通信+场景联动</span>
+│   ├── hardware/
+│   │   ├── light/light.c     <span class="cmt"># 光照传感器驱动 (PA7/ADC1_CH7, 两点校准)</span>
+│   │   ├── LED/led.c         <span class="cmt"># 绿色LED驱动 (PB1, 低电平点亮)</span>
+│   │   ├── OLED/             <span class="cmt"># OLED显示驱动</span>
+│   │   ├── dht11/            <span class="cmt"># DHT11温湿度传感器 (备用)</span>
+│   │   └── sht20/            <span class="cmt"># SHT20温湿度传感器 (备用)</span>
+│   ├── NET/
+│   │   ├── onenet/
+│   │   │   ├── src/onenet.c  <span class="cmt"># OneNET MQTT协议：连接/上报/订阅/下发/联动</span>
+│   │   │   ├── src/base64.c  <span class="cmt"># Base64编解码</span>
+│   │   │   └── src/hmac_sha1.c <span class="cmt"># HMAC-SHA1签名算法</span>
+│   │   ├── MQTT/             <span class="cmt"># MQTT协议栈 (mqttkit)</span>
+│   │   └── device/           <span class="cmt"># ESP8266 AT指令驱动</span>
+│   └── stm32f103.uvprojx     <span class="cmt"># Keil MDK工程文件</span>
+│
+├── 人体传感器副本/            <span class="cmt"># 人体感应STM32工程 (addp_02)</span>
+│   ├── user/main.c           <span class="cmt"># 主程序：PIR检测+LED控制+OLED显示+MQTT上报</span>
+│   ├── hardware/
+│   │   └── light/human.c     <span class="cmt"># HC-SR501 PIR传感器驱动 (PA4)</span>
+│   ├── NET/                  <span class="cmt"># 同上：onenet/MQTT/device 协议栈</span>
+│   └── stm32f103.uvprojx
+│
+├── 蜂鸣器副本/                <span class="cmt"># 蜂鸣器STM32工程 (addp_03)</span>
+│   ├── user/main.c           <span class="cmt"># 主程序：间歇蜂鸣控制+MQTT收发</span>
+│   ├── hardware/
+│   │   ├── BUZZER/buzzer.c   <span class="cmt"># 蜂鸣器驱动 (PA6, 高电平鸣叫)</span>
+│   │   └── Sensor/           <span class="cmt"># 烟雾/气体传感器 (备用)</span>
+│   ├── NET/                  <span class="cmt"># 同上：onenet/MQTT/device 协议栈</span>
+│   └── stm32f103.uvprojx
+│
+└── miniprogram-1 - 副本/     <span class="cmt"># 微信小程序</span>
+    ├── app.js                <span class="cmt"># 小程序入口：登录+全局状态</span>
+    ├── app.json              <span class="cmt"># 窗口配置（暗色主题）+ 页面路由</span>
+    ├── app.wxss              <span class="cmt"># 全局样式</span>
+    ├── project.config.json   <span class="cmt"># 项目配置 (AppID: wxce1461b726368140)</span>
+    ├── utils/
+    │   ├── database.js       <span class="cmt"># 数据库层：IndexedDB/wx.Storage双模式 (427行)</span>
+    │   └── util.js           <span class="cmt"># 工具函数 (时间格式化)</span>
+    └── pages/
+        ├── index/            <span class="cmt"># 设备监控主页 (723行核心逻辑)</span>
+        │   ├── index.js      <span class="cmt"># 数据获取/解析/图表/控制/联动展示</span>
+        │   ├── index.wxml    <span class="cmt"># 页面结构 (224行)</span>
+        │   └── index.wxss    <span class="cmt"># 暗色主题样式 (557行)</span>
+        ├── config/           <span class="cmt"># 设备配置页</span>
+        │   ├── config.js     <span class="cmt"># 配置管理/连接测试 (225行)</span>
+        │   ├── config.wxml   <span class="cmt"># 表单+使用说明</span>
+        │   └── config.wxss
+        └── logs/             <span class="cmt"># 启动日志页</span>
+            ├── logs.js
+            ├── logs.wxml
+            └── logs.wxss</code></pre>
+</div>
+
+<!-- ═══════════════════════ 9. 技术栈 ═══════════════════════ -->
+<div class="section" id="tech-stack">
+  <h2><span class="icon">🛠️</span> 9. 技术栈总览</h2>
+  <table>
+    <tr><th style="width:160px">层级</th><th>技术</th><th>说明</th></tr>
+    <tr><td>硬件MCU</td><td>STM32F103 (ARM Cortex-M3)</td><td>72MHz, 64KB SRAM, 512KB Flash</td></tr>
+    <tr><td>WiFi模块</td><td>ESP8266 (AT指令)</td><td>USART2 115200bps, MQTT透传</td></tr>
+    <tr><td>传感器</td><td>模拟光照传感器 + HC-SR501 PIR</td><td>ADC采集 + GPIO数字输入</td></tr>
+    <tr><td>执行器</td><td>LED (PB1) + 有源蜂鸣器 (PA6)</td><td>GPIO推挽输出</td></tr>
+    <tr><td>显示</td><td>OLED (I2C)</td><td>128×64, SSD1306驱动</td></tr>
+    <tr><td>RTOS</td><td>FreeRTOS (CMSIS-RTOS)</td><td>任务调度、定时器</td></tr>
+    <tr><td>IDE</td><td>Keil MDK-ARM</td><td>ARM Compiler 5/6</td></tr>
+    <tr><td>云平台</td><td>中国移动 OneNET</td><td>MQTT Broker + 物模型 + REST API</td></tr>
+    <tr><td>通信协议</td><td>MQTT 3.1.1</td><td>QoS 0, HMAC-SHA1认证, JSON Payload</td></tr>
+    <tr><td>小程序框架</td><td>微信小程序 (Glass-Easel)</td><td>基础库 3.16.1, ES6+</td></tr>
+    <tr><td>本地存储</td><td>IndexedDB / wx.Storage</td><td>降级策略, 配置+传感器数据</td></tr>
+    <tr><td>数据可视化</td><td>Canvas 2D API</td><td>折线图、触摸手势交互</td></tr>
+    <tr><td>加密算法</td><td>HMAC-SHA1 + Base64</td><td>OneNET Token签权</td></tr>
+  </table>
+</div>
+
+<!-- ═══════════════════════ Footer ═══════════════════════ -->
+<div class="footer">
+  <p>基于OneNET的硬件与微信小程序联动系统 — 项目说明文档</p>
+  <p>生成日期：2026-06-24 &nbsp;|&nbsp; 项目路径：C:\Users\27161\dc\xchbd</p>
+</div>
+
+</div>
+
+</body>
+</html>

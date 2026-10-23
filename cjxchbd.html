@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>STM32 + OneNET + 微信小程序 — 关键代码展示</title>
+<style>
+  @page { size: A4; margin: 1.5cm; }
+  body {
+    font-family: "Microsoft YaHei", "SimHei", sans-serif;
+    font-size: 11pt;
+    line-height: 1.6;
+    color: #222;
+    max-width: 210mm;
+    margin: 0 auto;
+    padding: 20px 30px;
+    background: #fff;
+  }
+  h1 {
+    text-align: center;
+    font-size: 18pt;
+    border-bottom: 2px solid #1a73e8;
+    padding-bottom: 10px;
+    margin-bottom: 5px;
+    color: #1a3c6e;
+  }
+  h2 {
+    font-size: 14pt;
+    color: #1a73e8;
+    border-left: 4px solid #1a73e8;
+    padding-left: 10px;
+    margin: 30px 0 12px 0;
+  }
+  h3 {
+    font-size: 12pt;
+    color: #333;
+    margin: 18px 0 6px 0;
+    padding: 4px 8px;
+    background: #e8f0fe;
+    border-radius: 3px;
+  }
+  .module-desc {
+    color: #666;
+    font-size: 10pt;
+    margin: 2px 0 8px 12px;
+    border-left: 2px solid #ddd;
+    padding-left: 10px;
+  }
+  pre {
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-left: 3px solid #1a73e8;
+    padding: 10px 14px;
+    font-family: "Consolas", "Courier New", "Source Code Pro", monospace;
+    font-size: 9pt;
+    line-height: 1.45;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 6px 0 14px 0;
+    border-radius: 4px;
+  }
+  .comment { color: #6a9955; }
+  .keyword { color: #569cd6; font-weight: bold; }
+  .string  { color: #a31515; }
+  .number  { color: #098658; }
+  .func    { color: #795e26; }
+  .macro   { color: #4e6190; }
+  .type    { color: #267f99; }
+  .note {
+    background: #fffde7;
+    border: 1px solid #ffe082;
+    padding: 6px 12px;
+    margin: 10px 0;
+    font-size: 10pt;
+    color: #6d4c41;
+    border-radius: 3px;
+  }
+  .note strong { color: #e65100; }
+  hr { border: none; border-top: 1px dashed #ccc; margin: 24px 0; }
+  .page-break { page-break-before: always; }
+  .subtitle {
+    text-align: center;
+    color: #888;
+    font-size: 10pt;
+    margin-bottom: 20px;
+  }
+  /* Print */
+  @media print {
+    body { padding: 0; }
+    pre { background: #fafafa !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .note { background: #fffde7 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+<h1>STM32 + OneNET + 微信小程序<br>关键代码展示</h1>
+<p class="subtitle">涵盖：微信小程序端 · 蜂鸣器控制 · 光照传感器 · 人体红外传感器</p>
+
+<!-- ============================================================ -->
+<!-- 第一部分：微信小程序 -->
+<!-- ============================================================ -->
+<h2>一、微信小程序端</h2>
+<p class="module-desc">基于微信小程序框架，通过 OneNET 物模型 API 与 STM32 设备双向通信。实现光照/人体/蜂鸣器三合一监测面板、设备配置持久化、实时图表绘制。</p>
+
+<!-- app.js -->
+<h3>1.1 应用入口 — app.js</h3>
+<p class="module-desc">小程序生命周期入口，初始化本地日志存储与微信登录。</p>
+<pre>
+<span class="comment">// app.js — 小程序应用入口</span>
+App({
+  onLaunch() {
+    <span class="comment">// 展示本地存储能力：记录每次启动时间戳</span>
+    <span class="keyword">const</span> logs = wx.getStorageSync(<span class="string">'logs'</span>) || []
+    logs.unshift(Date.now())
+    wx.setStorageSync(<span class="string">'logs'</span>, logs)
+
+    <span class="comment">// 微信登录，获取 openId / sessionKey</span>
+    wx.login({
+      success: res =&gt; {
+        <span class="comment">// 发送 res.code 到后台换取 openId, sessionKey, unionId</span>
+      }
+    })
+  },
+  globalData: { userInfo: <span class="keyword">null</span> }
+})
+</pre>
+
+<!-- database.js 核心 -->
+<h3>1.2 本地数据库 — database.js（核心片段）</h3>
+<p class="module-desc">双层存储架构：优先使用 IndexedDB（大容量），降级使用 wx.Storage API。管理设备配置与传感器历史数据。</p>
+<pre>
+<span class="comment">// database.js — 本地数据库封装（IndexedDB + Storage 双栈）</span>
+<span class="keyword">class</span> <span class="type">Database</span> {
+  <span class="func">constructor</span>() {
+    <span class="keyword">this</span>.useIndexedDB = <span class="keyword">false</span>
+    <span class="keyword">this</span>.init()
+  }
+
+  <span class="func">initIndexedDB</span>() {                         <span class="comment">// 初始化 IndexedDB</span>
+    <span class="keyword">const</span> request = indexedDB.open(<span class="keyword">this</span>.dbName, <span class="keyword">this</span>.dbVersion)
+    request.onupgradeneeded = <span class="keyword">function</span>(event) {
+      <span class="keyword">const</span> db = event.target.result
+      <span class="comment">// 设备配置表：按 deviceId 建唯一索引</span>
+      <span class="keyword">if</span> (!db.objectStoreNames.contains(<span class="string">'configs'</span>)) {
+        <span class="keyword">const</span> store = db.createObjectStore(<span class="string">'configs'</span>, { keyPath: <span class="string">'id'</span>, autoIncrement: <span class="keyword">true</span> })
+        store.createIndex(<span class="string">'deviceId'</span>, <span class="string">'deviceId'</span>, { unique: <span class="keyword">true</span> })
+      }
+      <span class="comment">// 传感器数据表：按 deviceId + timestamp 建索引</span>
+      <span class="keyword">if</span> (!db.objectStoreNames.contains(<span class="string">'sensorData'</span>)) {
+        <span class="keyword">const</span> store = db.createObjectStore(<span class="string">'sensorData'</span>, { keyPath: <span class="string">'id'</span>, autoIncrement: <span class="keyword">true</span> })
+        store.createIndex(<span class="string">'deviceId'</span>, <span class="string">'deviceId'</span>, { unique: <span class="keyword">false</span> })
+        store.createIndex(<span class="string">'timestamp'</span>, <span class="string">'timestamp'</span>, { unique: <span class="keyword">false</span> })
+      }
+    }
+  }
+
+  <span class="comment">// 添加传感器数据，超过 1000 条自动裁剪</span>
+  <span class="keyword">async</span> <span class="func">addSensorData</span>(data) { <span class="comment">/* ... IndexedDB / Storage 双路径 ... */</span> }
+
+  <span class="comment">// 按设备 ID 获取历史数据，按时间倒序排列，限制条数</span>
+  <span class="keyword">async</span> <span class="func">getSensorDataByDeviceId</span>(deviceId, limit = <span class="number">100</span>) { <span class="comment">/* ... */</span> }
+
+  <span class="comment">// 清理 7 天前的旧数据，控制存储空间</span>
+  <span class="keyword">async</span> <span class="func">deleteOldSensorData</span>(deviceId, daysToKeep = <span class="number">7</span>) { <span class="comment">/* ... */</span> }
+}
+</pre>
+
+<!-- index.js 核心逻辑 -->
+<h3>1.3 主监测页 — pages/index/index.js（核心逻辑）</h3>
+<p class="module-desc">首页核心：三设备并行查询、数据解析与联动、光照灯远程控制、蜂鸣器远程控制、Canvas 图表绘制。每 10 秒自动刷新。</p>
+<pre>
+<span class="comment">// index.js — 首页逻辑（核心片段）</span>
+Page({
+  data: {
+    light: <span class="string">'--'</span>,           <span class="comment">// 光照强度 (lux)</span>
+    pir: <span class="string">'--'</span>,            <span class="comment">// 人体感应 (有人/无人)</span>
+    buzzer: <span class="string">'--'</span>,         <span class="comment">// 蜂鸣器状态 (已触发/未触发)</span>
+    lightDevice: <span class="string">'addp_01'</span>,    <span class="comment">// 光照设备名称</span>
+    humanDevice: <span class="string">'addp_02'</span>,    <span class="comment">// 人体感应设备</span>
+    buzzerDevice: <span class="string">'addp_03'</span>,   <span class="comment">// 蜂鸣器设备</span>
+    ledMode: <span class="string">'auto'</span>,        <span class="comment">// LED 模式: auto / manual</span>
+    buzzerEnabled: <span class="keyword">false</span>,
+    historyData: [],             <span class="comment">// 历史数据缓存</span>
+    chartData: { lightPoints: [], pirPoints: [], labels: [] }
+  },
+
+  <span class="comment">/* 并行查询三个设备属性 —— 核心通信函数 */</span>
+  <span class="keyword">async</span> <span class="func">queryDevice</span>(deviceName, accessKey, productId) {
+    <span class="keyword">const</span> res = <span class="keyword">await</span> wxRequest({
+      url: <span class="string">'https://iot-api.heclouds.com/thingmodel/query-device-property'</span>,
+      method: <span class="string">'GET'</span>,
+      header: { <span class="string">'Content-Type'</span>: <span class="string">'application/json'</span>, <span class="string">'authorization'</span>: accessKey },
+      data: { product_id: productId, device_name: deviceName },
+      timeout: <span class="number">8000</span>
+    })
+    <span class="keyword">return</span> { deviceName, res }
+  },
+
+  <span class="keyword">async</span> <span class="func">fetchData</span>() {                            <span class="comment">// 数据拉取入口</span>
+    <span class="keyword">const</span> { productId, accessKey, lightDevice, humanDevice, buzzerDevice } = config
+    <span class="comment">// 并行查询三台设备，Promise.all 同时发起</span>
+    <span class="keyword">const</span> results = <span class="keyword">await</span> Promise.all([
+      <span class="keyword">this</span>.queryDevice(lightDevice, accessKey, productId),
+      <span class="keyword">this</span>.queryDevice(humanDevice, accessKey, productId),
+      <span class="keyword">this</span>.queryDevice(buzzerDevice, accessKey, productId)
+    ])
+    <span class="keyword">this</span>.parseAllDeviceData(results, { lightDevice, humanDevice, buzzerDevice })
+  },
+
+  <span class="comment">/* 解析设备数据 + 场景联动 */</span>
+  <span class="func">parseAllDeviceData</span>(results, deviceNames) {
+    <span class="comment">// 遍历每个设备返回的 property 数据</span>
+    <span class="comment">// 光照设备 → light 字段；人体设备 → Pir 字段；蜂鸣器设备 → buzzer_switch 字段</span>
+    <span class="comment">// 场景联动：光照 >= 3000 lux 时自动标记蜂鸣器触发</span>
+  },
+
+  <span class="comment">/* 光照灯控制 —— 通过 OneNET 物模型 set-device-property */</span>
+  <span class="func">sendLightCommand</span>(ledOn) {
+    wx.request({
+      url: <span class="string">'https://iot-api.heclouds.com/thingmodel/set-device-property'</span>,
+      method: <span class="string">'POST'</span>,
+      header: { <span class="string">'authorization'</span>: accessKey },
+      data: {
+        product_id: productId,
+        device_name: lightDevice,
+        params: { led: ledOn }                  <span class="comment">// true=手动开, false=自动模式</span>
+      }
+    })
+  },
+
+  <span class="comment">/* 蜂鸣器控制 —— 通过 OneNET 物模型下发 buzzer_switch */</span>
+  <span class="func">sendBuzzerCommand</span>(buzzerOn) {
+    wx.request({
+      url: <span class="string">'https://iot-api.heclouds.com/thingmodel/set-device-property'</span>,
+      method: <span class="string">'POST'</span>,
+      data: {
+        product_id: productId,
+        device_name: buzzerDevice,
+        params: { buzzer_switch: buzzerOn }     <span class="comment">// true=开启蜂鸣器, false=关闭</span>
+      }
+    })
+  },
+
+  <span class="comment">/* Canvas 图表绘制 —— 光照/人体感应趋势图 */</span>
+  <span class="func">drawChart</span>() {
+    <span class="keyword">const</span> canvas = wx.createCanvasContext(<span class="string">'chartCanvas'</span>)
+    <span class="comment">// 根据 activeChart 绘制光照折线或双线组合</span>
+    <span class="comment">// 坐标轴自适应：动态计算 Y 轴刻度范围</span>
+    <span class="comment">// 支持触摸滑动浏览历史数据</span>
+  },
+
+  onLoad() { <span class="keyword">this</span>.fetchData(); <span class="keyword">this</span>.startRefreshTimer() },  <span class="comment">// 每 10s 自动刷新</span>
+  startRefreshTimer() { <span class="keyword">this</span>.timer = setInterval(() =&gt; <span class="keyword">this</span>.fetchData(), <span class="number">10000</span>) }
+})
+</pre>
+
+<!-- config.js -->
+<h3>1.4 设备配置页 — pages/config/config.js</h3>
+<p class="module-desc">管理 OneNET 产品 ID、AccessKey 及三台设备名称的配置。支持多套配置保存/切换/清除，连接测试。</p>
+<pre>
+<span class="comment">// config.js — 设备配置页</span>
+Page({
+  <span class="comment">// 保存配置到本地 Storage + IndexedDB 双写</span>
+  <span class="keyword">async</span> <span class="func">saveConfig</span>() {
+    <span class="keyword">const</span> config = {
+      productId, accessKey,
+      lightDevice, humanDevice, buzzerDevice,
+      savedAt: <span class="keyword">new</span> Date().toLocaleString()
+    }
+    wx.setStorageSync(<span class="string">'deviceConfig'</span>, config)       <span class="comment">// 同步写入 Storage</span>
+    <span class="keyword">const</span> id = <span class="keyword">await</span> db.addConfig({                  <span class="comment">// 异步写入 IndexedDB</span>
+      productId, accessKey, lightDevice, humanDevice, buzzerDevice
+    })
+  },
+
+  <span class="comment">// OneNET 连接测试 —— 查询设备属性验证凭证是否有效</span>
+  <span class="func">testConnection</span>() {
+    wx.request({
+      url: <span class="string">'https://iot-api.heclouds.com/thingmodel/query-device-property'</span>,
+      header: { <span class="string">'authorization'</span>: accessKey },
+      data: { product_id: productId, device_name: lightDevice }
+    })
+  },
+
+  <span class="comment">// 多配置切换：点击历史配置项载入对应参数</span>
+  <span class="func">selectConfig</span>(config) { <span class="comment">/* 载入配置并写入 Storage */</span> },
+  <span class="func">clearConfig</span>() { <span class="comment">/* 清除 Storage 和 IndexedDB 中的配置 */</span> }
+})
+</pre>
+
+<hr>
+
+<!-- ============================================================ -->
+<!-- 第二部分：STM32 蜂鸣器 -->
+<!-- ============================================================ -->
+<h2>二、STM32 蜂鸣器控制</h2>
+<p class="module-desc">基于 STM32F103 + ESP8266 WiFi 模块，通过 MQTT 协议接入 OneNET 平台。接收小程序下发的 buzzer_switch 指令，实现蜂鸣器间歇鸣响（响1秒/停2秒循环）。</p>
+
+<h3>2.1 蜂鸣器驱动 — buzzer.c / buzzer.h</h3>
+<pre>
+<span class="comment">/* buzzer.h — 蜂鸣器引脚宏定义 */</span>
+<span class="macro">#define S12BUZZER_RCC   RCC_APB2Periph_GPIOA</span>
+<span class="macro">#define S12BUZZER_PORT  GPIOA</span>
+<span class="macro">#define S12BUZZER_PIN   GPIO_Pin_6</span>
+
+<span class="keyword">void</span> <span class="func">Buzzer_Init</span>(<span class="keyword">void</span>);
+<span class="keyword">void</span> <span class="func">Control_Buzzer</span>(<span class="type">u8</span> cmd);    <span class="comment">// cmd=1 响, cmd=0 停</span>
+
+<span class="comment">/* buzzer.c — 蜂鸣器 GPIO 推挽输出驱动 */</span>
+<span class="keyword">void</span> <span class="func">Buzzer_Init</span>(<span class="keyword">void</span>)
+{
+    GPIO_InitTypeDef  GPIO_InitStructure;
+    RCC_APB2PeriphClockCmd(S12BUZZER_RCC, ENABLE);       <span class="comment">// 使能 GPIOA 时钟</span>
+    GPIO_InitStructure.GPIO_Pin  = S12BUZZER_PIN;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;      <span class="comment">// 推挽输出</span>
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(S12BUZZER_PORT, &amp;GPIO_InitStructure);
+    GPIO_ResetBits(S12BUZZER_PORT, S12BUZZER_PIN);        <span class="comment">// 默认关闭</span>
+}
+
+<span class="keyword">void</span> <span class="func">Control_Buzzer</span>(<span class="type">u8</span> cmd)
+{
+    <span class="keyword">if</span> (cmd == <span class="number">1</span>)  GPIO_SetBits(S12BUZZER_PORT, S12BUZZER_PIN);    <span class="comment">// 高电平 → 响</span>
+    <span class="keyword">else</span>        GPIO_ResetBits(S12BUZZER_PORT, S12BUZZER_PIN);  <span class="comment">// 低电平 → 停</span>
+}
+</pre>
+
+<h3>2.2 主控逻辑 — main.c</h3>
+<pre>
+<span class="comment">/* main.c — STM32 蜂鸣器设备主程序 */</span>
+<span class="type">uint8_t</span> g_buzzer_enabled = <span class="number">0</span>;        <span class="comment">// 全局蜂鸣器使能标志（由云平台下行设置）</span>
+
+<span class="keyword">int</span> <span class="func">main</span>(<span class="keyword">void</span>)
+{
+    NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
+    Delay_Init();                              <span class="comment">// SysTick 初始化</span>
+    Usart3_Init(<span class="number">115200</span>);                       <span class="comment">// 串口3 — 调试打印</span>
+    Usart2_Init(<span class="number">115200</span>);                       <span class="comment">// 串口2 — 驱动 ESP8266</span>
+    ESP8266_Init();                            <span class="comment">// WiFi 模块初始化</span>
+    OLED_Init();  LED_Init();
+    Sensor_Init();  Buzzer_Init();
+
+    <span class="comment">/* 连接 OneNET MQTT 服务器 */</span>
+    <span class="keyword">while</span> (ESP8266_SendCmd(ESP8266_ONENET_INFO, <span class="string">"CONNECT"</span>))  delay_ms(<span class="number">500</span>);
+    <span class="keyword">while</span> (OneNet_DevLink())  delay_ms(<span class="number">500</span>);   <span class="comment">// 鉴权 + MQTT CONNECT</span>
+    OneNET_Subscribe();                        <span class="comment">// 订阅属性设置主题</span>
+
+    <span class="keyword">while</span> (<span class="number">1</span>)
+    {
+        <span class="comment">/* 蜂鸣器间歇控制：响1秒(10 ticks) / 停2秒(20 ticks) */</span>
+        <span class="keyword">if</span> (g_buzzer_enabled) {
+            buzzer_tick++;
+            <span class="keyword">if</span>      (buzzer_tick &lt;= <span class="number">10</span>)  Control_Buzzer(<span class="number">1</span>);   <span class="comment">// 0~1s: 响</span>
+            <span class="keyword">else if</span> (buzzer_tick &lt;= <span class="number">30</span>)  Control_Buzzer(<span class="number">0</span>);   <span class="comment">// 1~3s: 停</span>
+            <span class="keyword">else</span>  buzzer_tick = <span class="number">0</span>;
+        } <span class="keyword">else</span> {
+            Control_Buzzer(<span class="number">0</span>);  buzzer_tick = <span class="number">0</span>;
+        }
+
+        <span class="comment">/* 处理云平台下行数据 */</span>
+        dataPtr = ESP8266_GetIPD(<span class="number">0</span>);
+        <span class="keyword">if</span> (dataPtr != <span class="keyword">NULL</span>)  OneNet_RevPro(dataPtr);   <span class="comment">// 解析 MQTT 消息</span>
+
+        <span class="comment">/* 每 3 秒上报一次设备状态 */</span>
+        <span class="keyword">if</span> (++send_count &gt;= <span class="number">30</span>) { send_count = <span class="number">0</span>;  OneNet_SendData(); }
+
+        delay_ms(<span class="number">100</span>);
+    }
+}
+</pre>
+
+<h3>2.3 OneNET MQTT 协议栈 — onenet.c（核心片段）</h3>
+<pre>
+<span class="comment">/* onenet.c — OneNET MQTT 连接、上报、订阅、下行解析 */</span>
+<span class="macro">#define OneNet_Product_ID   "182uSs4N9a"</span>
+<span class="macro">#define OneNet_Access_KEY   "8V9zxR1hO/WVs8kXUx9dzz9D/XG3d0mhUdVnezFvI8E="</span>
+<span class="macro">#define OneNet_Device_NAME  "addp_03"</span>
+
+<span class="comment">/* ── SHA1-HMAC 签名生成 Token ── */</span>
+<span class="keyword">static</span> <span class="type">unsigned char</span> <span class="func">OneNET_Authorization</span>(...) {
+    <span class="comment">// 1. Base64 解码 AccessKey → 原始密钥</span>
+    BASE64_Decode(access_key_base64, ..., access_key, ...);
+    <span class="comment">// 2. 拼接签名字符串: et\nmethod\nres\ndev_name\nversion</span>
+    snprintf(string_for_signature, ..., <span class="string">"%d\n%s\nproducts/%s/devices/%s\n%s"</span>, ...);
+    <span class="comment">// 3. HMAC-SHA1 计算签名 → Base64 编码 → URL 转义</span>
+    hmac_sha1(key, ..., string_for_signature, ..., hmac_buf);
+    BASE64_Encode(sign_buf, ..., hmac_buf, ...);
+    OTA_UrlEncode(sign_buf);
+    <span class="comment">// 4. 组装 authorization 参数字符串</span>
+}
+
+<span class="comment">/* ── MQTT CONNECT 接入 OneNET ── */</span>
+_Bool <span class="func">OneNet_DevLink</span>(<span class="keyword">void</span>) {
+    MQTT_PacketConnect(Product_ID, authorization_buf, Device_NAME, <span class="number">256</span>, <span class="number">1</span>, MQTT_QOS_LEVEL0, ...);
+    ESP8266_SendData(mqttPacket._data, mqttPacket._len);   <span class="comment">// 通过 ESP8266 发送</span>
+    <span class="comment">// 等待 CONNACK 确认接入成功</span>
+}
+
+<span class="comment">/* ── 数据上报：JSON 格式 → $sys/{pid}/{dev}/thing/property/post ── */</span>
+<span class="keyword">void</span> <span class="func">OneNet_SendData</span>(<span class="keyword">void</span>) {
+    snprintf(buf, <span class="number">256</span>,
+        <span class="string">"{\"method\":\"thing.property.post\",\"id\":\"1\",\"params\":{"</span>
+        <span class="string">"\"buzzer_switch\":{\"value\":%s}}}"</span>,
+        g_buzzer_enabled ? <span class="string">"true"</span> : <span class="string">"false"</span>);
+    OneNET_Publish(topic, buf);
+}
+
+<span class="comment">/* ── 订阅属性设置 &amp; 属性查询主题 ── */</span>
+<span class="keyword">void</span> <span class="func">OneNET_Subscribe</span>(<span class="keyword">void</span>) {
+    <span class="comment">// topic_set: $sys/{pid}/addp_03/thing/property/set</span>
+    <span class="comment">// topic_get: $sys/{pid}/addp_03/thing/property/get</span>
+    MQTT_PacketSubscribe(MQTT_SUBSCRIBE_ID, MQTT_QOS_LEVEL0, topics, <span class="number">2</span>, &amp;mqtt_packet);
+}
+
+<span class="comment">/* ── 下行解析：提取 buzzer_switch 并控制蜂鸣器 ── */</span>
+<span class="keyword">void</span> <span class="func">OneNet_RevPro</span>(<span class="type">unsigned char</span> *cmd) {
+    <span class="comment">// MQTT_UnPacketRecv → 判断包类型 (PUBLISH / PUBACK / SUBACK)</span>
+    <span class="comment">// PUBLISH:  解析 topic + payload → JSON 中提取 "buzzer_switch"</span>
+    <span class="comment">//           支持嵌套格式 {"buzzer_switch":{"value":true}} 和直接格式 {"buzzer_switch":true}</span>
+    <span class="comment">//           设置 g_buzzer_enabled 标志位</span>
+    <span class="comment">//           → 发布 set_reply / get_reply 回执</span>
+}
+</pre>
+
+<div class="note"><strong>场景联动说明：</strong>当光照设备 (addp_01) 检测到光照 ≥ 3000 lux 时，通过 OneNET 服务调用向 addp_03 的 thing/property/set 主题下发 {"buzzer_switch":{"value":true}}，触发蜂鸣器间歇鸣响。</div>
+
+<hr>
+
+<!-- ============================================================ -->
+<!-- 第三部分：STM32 光照传感器 -->
+<!-- ============================================================ -->
+<h2>三、STM32 光照传感器 + LED 控制</h2>
+<p class="module-desc">STM32F103 通过 ADC 采集光照强度，支持手动/自动双模式控制 PB1 绿色 LED。自动模式下 TIM2 定时器每 100ms 根据阈值自动开关灯。</p>
+
+<h3>3.1 光照传感器驱动 — light.c</h3>
+<pre>
+<span class="comment">/* light.c — 光照传感器 ADC 采集 + Lux 换算 */</span>
+<span class="macro">#define LIGHT_ADC_CHANNEL   ADC_Channel_7</span>     <span class="comment">// PA7 — ADC1 通道7</span>
+<span class="macro">#define LIGHT_CAL_ADC1      1200</span>              <span class="comment">// 300 Lux 对应 ADC 值</span>
+<span class="macro">#define LIGHT_CAL_LUX1      300</span>
+<span class="macro">#define LIGHT_CAL_ADC2      3000</span>              <span class="comment">// 8000 Lux 对应 ADC 值</span>
+<span class="macro">#define LIGHT_CAL_LUX2      8000</span>
+
+<span class="comment">/* ADC 初始化：独立模式、软件触发、右对齐 */</span>
+<span class="keyword">void</span> <span class="func">Light_Init</span>(<span class="keyword">void</span>) {
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_ADC1, ENABLE);
+    <span class="comment">// PA7 配置为模拟输入</span>
+    <span class="comment">// ADC1: 独立模式、非扫描、非连续、软件触发、右对齐</span>
+    ADC_Cmd(ADC1, ENABLE);
+    ADC_ResetCalibration(ADC1);                 <span class="comment">// 复位校准</span>
+    <span class="keyword">while</span>(ADC_GetResetCalibrationStatus(ADC1));
+    ADC_StartCalibration(ADC1);                 <span class="comment">// 开始校准</span>
+    <span class="keyword">while</span>(ADC_GetCalibrationStatus(ADC1));
+}
+
+<span class="comment">/* 10 次采样取平均值，消除噪声 */</span>
+<span class="type">uint16_t</span> <span class="func">Light_GetAdcAverage</span>(<span class="keyword">void</span>) {
+    <span class="type">uint32_t</span> temp = <span class="number">0</span>;
+    <span class="keyword">for</span>(<span class="type">uint8_t</span> t = <span class="number">0</span>; t &lt; <span class="number">10</span>; t++) {
+        ADC_SoftwareStartConvCmd(ADC1, ENABLE);
+        <span class="keyword">while</span>(!ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC));  <span class="comment">// 等待转换完成</span>
+        temp += ADC_GetConversionValue(ADC1);
+    }
+    <span class="keyword">return</span> (<span class="type">uint16_t</span>)(temp / <span class="number">10</span>);
+}
+
+<span class="comment">/* ADC 值 → Lux 线性插值换算，钳位到 [0, 50000] */</span>
+<span class="type">uint16_t</span> <span class="func">Light_GetLux</span>(<span class="keyword">void</span>) {
+    <span class="type">uint16_t</span> adc = Light_GetAdcAverage();
+    <span class="type">float</span> lux = (<span class="type">float</span>)(adc - LIGHT_CAL_ADC1) * (LIGHT_CAL_LUX2 - LIGHT_CAL_LUX1)
+              / (LIGHT_CAL_ADC2 - LIGHT_CAL_ADC1) + LIGHT_CAL_LUX1;
+    <span class="keyword">if</span>(lux &lt; <span class="number">0</span>) lux = <span class="number">0</span>;
+    <span class="keyword">if</span>(lux &gt; <span class="number">50000</span>) lux = <span class="number">50000</span>;
+    <span class="keyword">return</span> (<span class="type">uint16_t</span>)lux;
+}
+</pre>
+
+<h3>3.2 主控逻辑 + TIM2 自动控制 — main.c</h3>
+<pre>
+<span class="comment">/* main.c — 光照设备(PB1 LED) — 手动/自动双模式 */</span>
+<span class="macro">#define LIGHT_THRESHOLD   1000</span>                  <span class="comment">// 自动开灯阈值 (Lux)</span>
+
+<span class="type">u16</span> light = <span class="number">0</span>;
+<span class="keyword">volatile</span> <span class="type">u8</span> led_mode = <span class="number">0</span>;                 <span class="comment">// 0=自动模式, 1=手动模式</span>
+<span class="keyword">volatile</span> <span class="type">u8</span> manual_led_state = <span class="number">0</span>;         <span class="comment">// 手动模式下 LED 状态</span>
+
+<span class="comment">/* TIM2 初始化：72MHz / (7199+1) / (999+1) = 10Hz (100ms 中断) */</span>
+<span class="keyword">void</span> <span class="func">TIM2_Light_Init</span>(<span class="keyword">void</span>) {
+    TIM_TimeBaseStructure.TIM_Period = <span class="number">999</span>;
+    TIM_TimeBaseStructure.TIM_Prescaler = <span class="number">7199</span>;
+    TIM_TimeBaseInit(TIM2, &amp;TIM_TimeBaseStructure);
+    TIM_ITConfig(TIM2, TIM_IT_Update, ENABLE);
+    TIM_Cmd(TIM2, ENABLE);
+}
+
+<span class="comment">/* TIM2 中断服务函数：自动模式下根据光照阈值控制 LED */</span>
+<span class="keyword">void</span> <span class="func">TIM2_IRQHandler</span>(<span class="keyword">void</span>) {
+    <span class="keyword">if</span>(TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET) {
+        TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
+        <span class="keyword">if</span>(led_mode == <span class="number">0</span>) {                        <span class="comment">// 仅自动模式下生效</span>
+            <span class="keyword">if</span>(light &lt; LIGHT_THRESHOLD)  LED_Green_On();   <span class="comment">// 光线暗 → 开灯</span>
+            <span class="keyword">else</span>                       LED_Green_Off();  <span class="comment">// 光线足 → 关灯</span>
+        }
+    }
+}
+
+<span class="keyword">int</span> <span class="func">main</span>(<span class="keyword">void</span>) {
+    <span class="comment">/* 初始化：系统时钟、串口、ESP8266、LED、OLED、光照、TIM2 */</span>
+    LED_Green_Off();
+
+    <span class="comment">/* 连接 OneNET + 订阅 */</span>
+    <span class="keyword">while</span>(OneNet_DevLink())  delay_ms(<span class="number">500</span>);
+    OneNET_Subscribe();
+
+    <span class="keyword">while</span>(<span class="number">1</span>) {
+        Read_Sensors();                          <span class="comment">// light = Light_GetLux()</span>
+        <span class="comment">/* OLED 显示：光照值 + 当前模式 */</span>
+        OLED_ShowString(<span class="number">0</span>, <span class="number">0</span>, <span class="string">"Light: "</span>, <span class="number">12</span>);  OLED_ShowNum(<span class="number">48</span>, <span class="number">0</span>, light, <span class="number">5</span>, <span class="number">12</span>);
+        <span class="comment">// Mode: AUTO / MANUAL</span>
+
+        <span class="comment">/* 处理云平台下行：解析 led 字段切换模式 */</span>
+        dataPtr = ESP8266_GetIPD(<span class="number">0</span>);
+        <span class="keyword">if</span>(dataPtr != <span class="keyword">NULL</span>)  OneNet_RevPro(dataPtr);
+
+        <span class="comment">/* 每 1 秒上报光照数据 */</span>
+        <span class="keyword">if</span>(++send_count &gt;= <span class="number">10</span>) { send_count = <span class="number">0</span>;  OneNet_SendData(); }
+
+        delay_ms(<span class="number">100</span>);
+    }
+}
+</pre>
+<div class="note"><strong>模式切换：</strong>小程序发送 led=true → STM32 进入手动模式（灯亮）；发送 led=false → STM32 切回自动模式（TIM2 根据阈值自动控灯）。</div>
+
+<hr>
+
+<!-- ============================================================ -->
+<!-- 第四部分：STM32 人体红外传感器 -->
+<!-- ============================================================ -->
+<h2>四、STM32 人体红外传感器</h2>
+<p class="module-desc">HC-SR501 人体红外传感器通过 GPIO 输入检测人体活动。检测到人体时绿色 LED 亮起，OLED 实时显示状态，数据每 1 秒上报 OneNET。</p>
+
+<h3>4.1 人体传感器驱动 — hum.c</h3>
+<pre>
+<span class="comment">/* hum.c — HC-SR501 人体红外传感器驱动（GPIO 浮空输入） */</span>
+<span class="macro">#define HUMAN_GPIO_PORT    GPIOA</span>
+<span class="macro">#define HUMAN_GPIO_PIN     GPIO_Pin_4</span>
+<span class="macro">#define HUMAN_GPIO_RCC     RCC_APB2Periph_GPIOA</span>
+
+<span class="comment">/* 初始化 PA4 为浮空输入模式 */</span>
+<span class="keyword">void</span> <span class="func">Human_Init</span>(<span class="keyword">void</span>)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+    RCC_APB2PeriphClockCmd(HUMAN_GPIO_RCC, ENABLE);
+    GPIO_InitStructure.GPIO_Pin  = HUMAN_GPIO_PIN;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;   <span class="comment">// 浮空输入</span>
+    GPIO_Init(HUMAN_GPIO_PORT, &amp;GPIO_InitStructure);
+}
+
+<span class="comment">/* 读取 PA4 电平：高电平=有人，低电平=无人 */</span>
+<span class="type">uint8_t</span> <span class="func">Human_Detect</span>(<span class="keyword">void</span>)
+{
+    <span class="keyword">return</span> GPIO_ReadInputDataBit(HUMAN_GPIO_PORT, HUMAN_GPIO_PIN);
+}
+</pre>
+
+<h3>4.2 主控逻辑 — main.c</h3>
+<pre>
+<span class="comment">/* main.c — 人体传感器设备 (addp_02) 主程序 */</span>
+<span class="type">u8</span> human = <span class="number">0</span>;                        <span class="comment">// 0=有人检测到, 1=无人</span>
+
+<span class="keyword">int</span> <span class="func">main</span>(<span class="keyword">void</span>)
+{
+    <span class="comment">/* 系统初始化：NVIC、SysTick、USART2/3、ESP8266、LED、OLED、人体传感器 */</span>
+    NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
+    Delay_Init();
+    Usart3_Init(<span class="number">115200</span>);                       <span class="comment">// 调试串口</span>
+    Usart2_Init(<span class="number">115200</span>);                       <span class="comment">// ESP8266 串口</span>
+    ESP8266_Init();                            <span class="comment">// WiFi 模块 AT 初始化</span>
+    LED_Init();  OLED_Init();  Human_Init();
+    LED_All_Off();
+
+    OLED_Clear();
+    OLED_ShowString(<span class="number">0</span>, <span class="number">0</span>, <span class="string">"OneNet Human"</span>, <span class="number">16</span>);
+
+    <span class="comment">/* 连接 WiFi → MQTT → OneNET */</span>
+    <span class="keyword">while</span>(ESP8266_SendCmd(ESP8266_ONENET_INFO, <span class="string">"CONNECT"</span>))  delay_ms(<span class="number">500</span>);
+    <span class="keyword">while</span>(OneNet_DevLink())  delay_ms(<span class="number">500</span>);
+
+    <span class="keyword">while</span>(<span class="number">1</span>)
+    {
+        <span class="comment">/* 读取人体传感器状态 */</span>
+        human = Human_Detect();                <span class="comment">// HC-SR501 数字输出</span>
+
+        <span class="comment">/* 人体检测 → LED 指示 + OLED 刷新 */</span>
+        Human_LED_Control(human);              <span class="comment">// 有人员 → 绿灯亮</span>
+        Human_Update_Display(human);           <span class="comment">// OLED 显示 "有人"/"无人"</span>
+
+        <span class="comment">/* 处理云平台下行消息 */</span>
+        dataPtr = ESP8266_GetIPD(<span class="number">0</span>);
+        <span class="keyword">if</span>(dataPtr != <span class="keyword">NULL</span>)  OneNet_RevPro(dataPtr);
+
+        <span class="comment">/* 每 1 秒上报 Pir 状态到 OneNET */</span>
+        <span class="keyword">if</span>(++send_count &gt;= <span class="number">10</span>) {
+            send_count = <span class="number">0</span>;
+            OneNet_SendData();
+            UsartPrintf(USART_DEBUG, <span class="string">"Data Uploaded: Pir=%s\r\n"</span>,
+                       human ? <span class="string">"false"</span> : <span class="string">"true"</span>);
+        }
+        delay_ms(<span class="number">100</span>);
+    }
+}
+</pre>
+<div class="note"><strong>上报格式：</strong>human=0 表示检测到人体(Pir=true)；human=1 表示无人(Pir=false)。小程序端 parseAllDeviceData 中判断 Pir 字段为 true/false 显示"有人"/"无人"。</div>
+
+<hr>
+
+</body>
+</html>

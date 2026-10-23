@@ -1,0 +1,224 @@
+<view class="container">
+  <view class="header">
+    <view class="header-title-wrapper">
+      <text class="header-title">设备监控</text>
+    </view>
+    <view class="header-actions">
+      <view class="refresh-btn" bindtap="onRefresh" loading="{{isLoading}}">
+        <text>🔄</text>
+      </view>
+      <view class="config-btn" bindtap="goToConfig">
+        <text>⚙️</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="device-status-card">
+    <view class="device-status-header">
+      <text class="device-name">光照: {{lightDevice}} | 人体: {{humanDevice}} | 蜂鸣器: {{buzzerDevice}}</text>
+      <view class="status-badge {{deviceStatus}}">
+        <view class="status-dot"></view>
+        <text>{{deviceStatus === 'online' ? '在线' : '离线'}}</text>
+      </view>
+    </view>
+    <view class="last-update">
+      <text>最后更新：{{lastUpdateTime}}</text>
+    </view>
+    <view wx:if="{{errorMsg}}" class="error-msg">
+      <text>⚠️ {{errorMsg}}</text>
+    </view>
+  </view>
+
+  <view class="sensors-section">
+    <view class="section-title-row">
+      <text class="section-title">
+        <text class="icon">📊</text>
+        实时数据
+      </text>
+      <text class="real-time-badge">实时</text>
+    </view>
+    
+    <view class="sensors-grid">
+      <view 
+        class="sensor-card" 
+        wx:for="{{sensors}}" 
+        wx:key="key"
+        style="background: {{item.bgGradient}}"
+        bindtap="viewSensorDetail"
+        data-sensor="{{item.key}}"
+      >
+        <view class="sensor-header">
+          <text class="sensor-icon">{{item.icon}}</text>
+          <view class="sensor-status" :class="item.status">{{item.status === 'normal' ? '正常' : '异常'}}</view>
+        </view>
+        <view class="sensor-body">
+          <text class="sensor-value">
+            {{item.key === 'light' ? light : item.key === 'pir' ? pir : buzzer}}
+          </text>
+          <text class="sensor-unit">{{item.unit}}</text>
+        </view>
+        <text class="sensor-label">{{item.label}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="chart-section">
+    <view class="section-title-row">
+      <text class="section-title">
+        <text class="icon">📈</text>
+        历史趋势
+      </text>
+      <view class="chart-tabs">
+        <view 
+          class="chart-tab {{activeChart === 'light' ? 'active' : ''}}" 
+          bindtap="switchChart" 
+          data-type="light"
+        >
+          光照
+        </view>
+        <view 
+          class="chart-tab {{activeChart === 'all' ? 'active' : ''}}" 
+          bindtap="switchChart" 
+          data-type="all"
+        >
+          全部
+        </view>
+      </view>
+    </view>
+    
+    <view class="chart-container">
+      <view 
+        class="chart-area" 
+        bindtouchstart="onChartTouchStart"
+        bindtouchmove="onChartTouchMove"
+        bindtouchend="onChartTouchEnd"
+      >
+        <canvas canvas-id="chartCanvas" class="chart-canvas"></canvas>
+      </view>
+    </view>
+  </view>
+
+  <view class="control-section">
+    <view class="section-title-row">
+      <text class="section-title">
+        <text class="icon">💡</text>
+        照明控制 ({{lightDevice}})
+      </text>
+      <view class="mode-badge {{ledMode}}">
+        <text>{{ledMode === 'auto' ? '自动模式' : '手动模式'}}</text>
+      </view>
+    </view>
+    
+    <view class="control-card">
+      <view class="led-status-display">
+        <view class="led-indicator {{lightStatus}}"></view>
+        <text class="led-status-text">
+          {{ledMode === 'auto' ? '光照自动控制中' : (lightStatus === 'on' ? '绿灯已开启' : '绿灯已关闭')}}
+        </text>
+      </view>
+      
+      <view class="control-buttons">
+        <button class="control-btn control-btn-on" bindtap="turnLightOn" loading="{{isTurningOn}}">
+          <text>🟢 打开绿灯</text>
+        </button>
+        <button class="control-btn control-btn-off" bindtap="turnLightOff" loading="{{isTurningOff}}">
+          <text>⚫ 关闭绿灯</text>
+        </button>
+      </view>
+      
+      <button class="auto-mode-btn" bindtap="setAutoMode">
+        <text>☀️ 切换到自动模式</text>
+      </button>
+      
+      <view class="control-hint">
+        <text>提示：手动操作后进入手动模式，点击"自动模式"恢复光照传感器控制</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="control-section">
+    <view class="section-title-row">
+      <text class="section-title">
+        <text class="icon">🔊</text>
+        蜂鸣器控制 ({{buzzerDevice}})
+      </text>
+      <view class="mode-badge {{buzzerEnabled ? 'manual' : 'auto'}}">
+        <text>{{buzzerEnabled ? '已触发' : '未触发'}}</text>
+      </view>
+    </view>
+    
+    <view class="control-card">
+      <view class="led-status-display">
+        <view class="led-indicator {{buzzerEnabled ? 'on' : 'off'}}"></view>
+        <text class="led-status-text">
+          场景联动: 光照≥3000lux自动触发 | 光照≤1000lux自动关闭
+        </text>
+      </view>
+      
+      <view class="control-buttons">
+        <button class="control-btn control-btn-on" bindtap="turnBuzzerOn" loading="{{isBuzzerOn}}">
+          <text>🔊 手动开启</text>
+        </button>
+        <button class="control-btn control-btn-off" bindtap="turnBuzzerOff" loading="{{isBuzzerOff}}">
+          <text>🔇 手动关闭</text>
+        </button>
+      </view>
+      
+      <view class="control-hint">
+        <text>提示：蜂鸣器默认由场景联动控制（光照≥3000lux触发，≤1000lux关闭），也可手动控制</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="command-section">
+    <view class="section-title-row">
+      <text class="section-title">
+        <text class="icon">📤</text>
+        发送命令
+      </text>
+    </view>
+    
+    <view class="command-input-wrapper">
+      <input 
+        class="command-input" 
+        placeholder="输入命令..." 
+        value="{{commandInput}}"
+        bindinput="onCommandInput"
+      />
+      <button class="send-btn" bindtap="sendCommand" loading="{{isSending}}">发送</button>
+    </view>
+  </view>
+
+  <view class="footer-actions">
+    <view class="footer-btn" bindtap="goToHistory">
+      <text class="footer-btn-icon">📅</text>
+      <text class="footer-btn-text">历史记录</text>
+    </view>
+    <view class="footer-btn" bindtap="goToConfig">
+      <text class="footer-btn-icon">⚙️</text>
+      <text class="footer-btn-text">设备配置</text>
+    </view>
+  </view>
+
+  <view class="detail-modal" wx:if="{{showDetailModal}}" bindtap="closeDetailModal">
+    <view class="modal-content" catchtap="preventClose">
+      <view class="modal-header">
+        <view class="modal-title">
+          <text class="modal-icon">{{currentSensor.icon}}</text>
+          <text>{{currentSensor.label}}</text>
+        </view>
+        <view class="modal-close" bindtap="closeDetailModal">×</view>
+      </view>
+      
+      <view class="modal-body">
+        <view class="detail-current">
+          <text class="detail-value">{{currentSensorValue}}</text>
+          <text class="detail-unit">{{currentSensor.unit}}</text>
+        </view>
+        <view class="detail-info">
+          <text>设备: {{currentSensor.key === 'light' ? lightDevice : currentSensor.key === 'pir' ? humanDevice : buzzerDevice}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

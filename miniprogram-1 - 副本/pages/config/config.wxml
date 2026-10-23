@@ -1,0 +1,108 @@
+<view class="container">
+  <view class="section">
+    <view class="section-title">
+      <text class="icon">⚙️</text>
+      <text>OneNET 多设备配置</text>
+    </view>
+    
+    <view class="form-item">
+      <text class="form-label">产品ID (Product ID)</text>
+      <input class="form-input" placeholder="例如: 182uSs4N9a" value="{{productId}}" bindinput="onProductIdInput" />
+    </view>
+    
+    <view class="form-item">
+      <text class="form-label">Access Key</text>
+      <input class="form-input" placeholder="产品access_key" value="{{accessKey}}" bindinput="onAccessKeyInput" password />
+    </view>
+
+    <view class="device-group-title">
+      <text class="icon">📡</text>
+      <text>设备名称配置</text>
+    </view>
+
+    <view class="form-item">
+      <text class="form-label">☀️ 光照传感器设备</text>
+      <input class="form-input" placeholder="addp_01" value="{{lightDevice}}" bindinput="onLightDeviceInput" />
+    </view>
+    
+    <view class="form-item">
+      <text class="form-label">👤 人体感应设备</text>
+      <input class="form-input" placeholder="addp_02" value="{{humanDevice}}" bindinput="onHumanDeviceInput" />
+    </view>
+    
+    <view class="form-item">
+      <text class="form-label">🔊 蜂鸣器设备</text>
+      <input class="form-input" placeholder="addp_03" value="{{buzzerDevice}}" bindinput="onBuzzerDeviceInput" />
+    </view>
+    
+    <view class="btn-group">
+      <button class="btn btn-primary" bindtap="saveConfig">保存配置</button>
+      <button class="btn btn-secondary" bindtap="clearConfig">清除配置</button>
+    </view>
+  </view>
+
+  <view class="section" wx:if="{{savedConfig}}">
+    <view class="section-title">
+      <text class="icon">📋</text>
+      <text>已保存的配置</text>
+    </view>
+    
+    <view class="config-item">
+      <text class="config-label">产品ID:</text>
+      <text class="config-value">{{savedConfig.productId}}</text>
+    </view>
+    
+    <view class="config-item">
+      <text class="config-label">Access Key:</text>
+      <text class="config-value token">已配置</text>
+    </view>
+
+    <view class="config-item">
+      <text class="config-label">光照设备:</text>
+      <text class="config-value">{{savedConfig.lightDevice || 'addp_01'}}</text>
+    </view>
+
+    <view class="config-item">
+      <text class="config-label">人体感应设备:</text>
+      <text class="config-value">{{savedConfig.humanDevice || 'addp_02'}}</text>
+    </view>
+
+    <view class="config-item">
+      <text class="config-label">蜂鸣器设备:</text>
+      <text class="config-value">{{savedConfig.buzzerDevice || 'addp_03'}}</text>
+    </view>
+    
+    <view class="btn-group">
+      <button class="btn btn-primary" bindtap="testConnection" loading="{{isTesting}}">
+        {{isTesting ? '测试中...' : '测试连接'}}
+      </button>
+      <button class="btn btn-secondary" bindtap="goToMonitor">进入设备监控</button>
+    </view>
+  </view>
+
+  <view class="section">
+    <view class="section-title">
+      <text class="icon">📖</text>
+      <text>使用说明</text>
+    </view>
+    
+    <view class="guide-content">
+      <view class="guide-item">
+        <text class="guide-num">1</text>
+        <text>登录 OneNET 平台获取产品ID和Access Key</text>
+      </view>
+      <view class="guide-item">
+        <text class="guide-num">2</text>
+        <text>填写产品ID、Access Key及三个设备名称</text>
+      </view>
+      <view class="guide-item">
+        <text class="guide-num">3</text>
+        <text>默认设备: addp_01(光照) / addp_02(人体) / addp_03(蜂鸣器)</text>
+      </view>
+      <view class="guide-item">
+        <text class="guide-num">4</text>
+        <text>测试连接成功后进入监控页面查看数据</text>
+      </view>
+    </view>
+  </view>
+</view>
